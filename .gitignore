@@ -1,0 +1,11 @@
+# Скриване на тайни
+.env
+
+# Скриване на локалната база данни и клонингите
+data/cyberguard.db
+data/clones/
+data/test_repo/
+
+# Python временни файлове
+__pycache__/
+*.pyc
