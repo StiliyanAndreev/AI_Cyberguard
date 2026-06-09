@@ -32,7 +32,7 @@ if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
-    st.title("🛡️ CyberGuard — Login")
+    st.title("🛡️ CyberGuard - Login")
     password = st.text_input("Password", type="password")
     if st.button("Login"):
         expected = os.getenv("APP_PASSWORD", "cyberguard")
