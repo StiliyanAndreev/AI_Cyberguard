@@ -51,7 +51,7 @@ def _sanitize(text: str, max_len: int = MAX_DIFF_CHARS_PER_COMMIT) -> str:
     return text.replace("\x00", "").strip()[:max_len]
 
 
-_MODEL_FALLBACK_CHAIN = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"]
+_MODEL_FALLBACK_CHAIN = ["gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]
 
 
 def _call_with_retry(fn, retries: int = 3, backoff: float = 2.0) -> Any:
