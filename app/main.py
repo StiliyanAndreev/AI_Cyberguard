@@ -309,8 +309,8 @@ elif menu == t["menu_scan"]:
 
             with st.spinner("Connecting to Git provider..."):
                 # Token is passed to git_handler; URL embedding happens there, never in session state
-                repo = get_repo(cp, is_cloud=is_remote, token=stored_token)
-                commits = get_latest_commits(repo)
+                repo, subpath = get_repo(cp, is_cloud=is_remote, token=stored_token)
+                commits = get_latest_commits(repo, path=subpath)
 
             clean_repo_name = cp.rstrip("/").split("/")[-1].replace(".git", "")
             st.success(f"Connected to: `{clean_repo_name}`")

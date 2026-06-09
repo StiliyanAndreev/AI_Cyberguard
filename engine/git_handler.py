@@ -26,14 +26,28 @@ def _remove_readonly(func, path: str, _) -> None:
         logger.warning("Could not remove %s: %s", path, exc)
 
 
-def _normalize_github_url(url: str) -> str:
-    """Strip GitHub web path suffixes like /tree/main/subdir — git clones repo roots only."""
+def _parse_github_url(url: str) -> tuple[str, str]:
+    """
+    Parse a GitHub URL into (clone_url, subpath).
+
+    Handles both repo root URLs and subdirectory browse URLs:
+      https://github.com/user/repo
+        → ("https://github.com/user/repo", "")
+      https://github.com/user/repo/tree/main/src/app
+        → ("https://github.com/user/repo", "src/app")
+    """
     parsed = urlparse(url)
-    if parsed.netloc in ("github.com", "www.github.com"):
-        parts = parsed.path.strip("/").split("/")
-        if len(parts) >= 2:
-            return f"{parsed.scheme}://{parsed.netloc}/{parts[0]}/{parts[1]}"
-    return url
+    if parsed.netloc not in ("github.com", "www.github.com"):
+        return url, ""
+    parts = parsed.path.strip("/").split("/")
+    if len(parts) < 2:
+        return url, ""
+    clone_url = f"{parsed.scheme}://{parsed.netloc}/{parts[0]}/{parts[1]}"
+    # parts: [owner, repo, "tree", branch, subdir...]
+    if len(parts) >= 5 and parts[2] == "tree":
+        subpath = "/".join(parts[4:])
+        return clone_url, subpath
+    return clone_url, ""
 
 
 def _validate_remote_url(url: str) -> None:
@@ -86,9 +100,13 @@ def _cleanup_clones_dir() -> None:
             logger.warning("Could not delete clone dir %s: %s", old_path, exc)
 
 
-def get_repo(path_or_url: str, is_cloud: bool = False, token: str = "") -> git.Repo:
+def get_repo(path_or_url: str, is_cloud: bool = False, token: str = "") -> tuple[git.Repo, str]:
     """
-    Return a GitPython Repo object.
+    Return (repo, subpath).
+
+    subpath is non-empty when the URL pointed at a subdirectory
+    (e.g. github.com/user/repo/tree/main/src/app → subpath="src/app").
+    Pass subpath to get_latest_commits() to filter commits by that folder.
 
     For remote URLs the token is embedded internally and never stored outside
     this function.  For local paths, directory traversal is blocked.
@@ -96,25 +114,25 @@ def get_repo(path_or_url: str, is_cloud: bool = False, token: str = "") -> git.R
     os.makedirs(CLONE_BASE_DIR, exist_ok=True)
 
     if is_cloud:
-        path_or_url = _normalize_github_url(path_or_url)
+        path_or_url, subpath = _parse_github_url(path_or_url)
         _validate_remote_url(path_or_url)
         _cleanup_clones_dir()
 
         clone_url = _build_auth_url(path_or_url, token) if token else path_or_url
-        # uuid4 suffix guarantees uniqueness even if called twice in the same second
         unique_dir = os.path.join(CLONE_BASE_DIR, f"repo_{uuid.uuid4().hex[:12]}")
-        # Paranoia: remove target if it somehow already exists
         if os.path.exists(unique_dir):
             shutil.rmtree(unique_dir, onerror=_remove_readonly)
-        return git.Repo.clone_from(clone_url, unique_dir)
+        return git.Repo.clone_from(clone_url, unique_dir), subpath
     else:
         abs_path = _validate_local_path(path_or_url)
         if not os.path.isdir(abs_path):
             raise ValueError(f"Local path does not exist or is not a directory: {abs_path}")
-        return git.Repo(abs_path)
+        return git.Repo(abs_path), ""
 
 
-def get_latest_commits(repo: git.Repo, count: int = COMMIT_FETCH_COUNT) -> list[git.Commit]:
+def get_latest_commits(repo: git.Repo, count: int = COMMIT_FETCH_COUNT, path: str = "") -> list[git.Commit]:
+    if path:
+        return list(repo.iter_commits(max_count=count, paths=path))
     return list(repo.iter_commits(max_count=count))
 
 
