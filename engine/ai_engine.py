@@ -137,7 +137,17 @@ Return ONLY the raw JSON array. No markdown, no extra text.
             ),
         ))
 
-        results: list[dict] = json.loads(response.text)
+        text_content = response.text.strip()
+        # Strip markdown wrappers that occasionally leak through despite response_mime_type=json
+        if text_content.startswith("```"):
+            text_content = text_content.split("```json")[-1].split("```")[0].strip()
+
+        try:
+            results: list[dict] = json.loads(text_content)
+        except json.JSONDecodeError as json_exc:
+            logger.error("JSON parse failed: %s | Raw response (first 300 chars): %.300s",
+                         json_exc, text_content)
+            return [{"error": f"JSON parse error: {json_exc}"}]
 
         # Clamp scores to valid range
         for r in results:

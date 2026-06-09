@@ -35,6 +35,9 @@ _MIN_SAMPLES_FOR_ML = 3
 def _temporal_features(df: pd.DataFrame) -> pd.DataFrame:
     """Return per-author avg_commit_hour and weekend_ratio from the Date column."""
     tmp = df.copy()
+    # Normalize to UTC so mixed-timezone repos don't skew hour-of-day signals
+    if tmp["Date"].dt.tz is not None:
+        tmp["Date"] = tmp["Date"].dt.tz_convert("UTC")
     tmp["_hour"] = tmp["Date"].dt.hour
     tmp["_is_weekend"] = tmp["Date"].dt.dayofweek >= 5  # 5=Sat, 6=Sun
 
@@ -115,6 +118,12 @@ def build_developer_profiles(df: pd.DataFrame) -> pd.DataFrame:
         X_scaled = scaler.fit_transform(X)
 
         contamination = float(np.clip(1.0 / len(profiles), 0.05, 0.25))
+        if len(profiles) > 20:
+            logger.info(
+                "Large team (%d devs): contamination capped at %.2f — "
+                "consider tuning UEBA thresholds if false-positive rate is high.",
+                len(profiles), contamination,
+            )
 
         clf = IsolationForest(
             n_estimators=200,
