@@ -51,7 +51,7 @@ def _sanitize(text: str, max_len: int = MAX_DIFF_CHARS_PER_COMMIT) -> str:
     return text.replace("\x00", "").strip()[:max_len]
 
 
-_MODEL_FALLBACK_CHAIN = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+_MODEL_FALLBACK_CHAIN = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"]
 
 
 def _call_with_retry(fn, retries: int = 3, backoff: float = 2.0) -> Any:
@@ -76,11 +76,13 @@ def _call_with_model_fallback(make_fn, models: list[str] = _MODEL_FALLBACK_CHAIN
         try:
             return _call_with_retry(lambda m=model: make_fn(m))
         except Exception as exc:
-            if "503" in str(exc) or "UNAVAILABLE" in str(exc) or "quota" in str(exc).lower():
+            err = str(exc)
+            if any(s in err for s in ("503", "UNAVAILABLE", "NOT_FOUND", "404", "deprecated", "no longer available")) \
+                    or "quota" in err.lower():
                 logger.warning("Model %s unavailable, trying next fallback. Error: %s", model, exc)
                 last_exc = exc
                 continue
-            raise  # non-503 errors bubble up immediately
+            raise  # other errors bubble up immediately
     raise last_exc  # type: ignore[misc]
 
 
