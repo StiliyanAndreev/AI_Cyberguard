@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import random
 import time
 from typing import Any
 
@@ -31,8 +32,8 @@ You are an Advanced Cyber-Security Intelligence System.
 - Continuous monitoring for modern CVEs and zero-day patterns.
 
 ### INVESTIGATION TRIGGER:
-If a code change is flagged as suspicious, perform a Google Search to cross-reference
-the logic with recent security research, data breach reports, or known APT signatures.
+If a code change is flagged as suspicious, cross-reference the logic with known
+MITRE ATT&CK techniques, common APT patterns, and data exfiltration indicators.
 """
 
 
@@ -54,15 +55,16 @@ def _sanitize(text: str, max_len: int = MAX_DIFF_CHARS_PER_COMMIT) -> str:
 _MODEL_FALLBACK_CHAIN = ["gemini-2.5-flash", "gemini-2.5-pro"]
 
 
-def _call_with_retry(fn, retries: int = 3, backoff: float = 2.0) -> Any:
-    """Call fn(), retrying on transient errors with exponential backoff."""
+def _call_with_retry(fn, retries: int = 4, backoff: float = 2.0) -> Any:
+    """Call fn(), retrying on transient errors with exponential backoff + jitter."""
     last_exc: Exception | None = None
     for attempt in range(retries):
         try:
             return fn()
         except Exception as exc:
             last_exc = exc
-            wait = backoff ** attempt
+            jitter = random.uniform(0.5, 1.5)
+            wait = (backoff ** attempt) + jitter
             logger.warning("Gemini API error (attempt %d/%d): %s — retrying in %.1fs",
                            attempt + 1, retries, exc, wait)
             time.sleep(wait)
