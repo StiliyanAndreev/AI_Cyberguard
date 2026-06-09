@@ -432,17 +432,18 @@ elif menu == t["menu_people"]:
                 weekend_flag = "⚠️" if weekend_pct > 40 else ""
 
                 st.markdown(f"""
-                <div class="dev-card" style="border-left-color: {border_color};">
-                    <h3>👤 {row['Author']}</h3>
-                    <p>Trust Level: <span style="color: {trust_color}; font-weight: bold;">{trust_label}</span>
+                <div style="background-color:#161b22; padding:20px; border-radius:12px;
+                            border-left:6px solid {border_color}; margin-bottom:15px;">
+                    <h3 style="margin:0 0 8px 0;">👤 {row['Author']}</h3>
+                    <p style="margin:4px 0;">Trust Level: <span style="color:{trust_color}; font-weight:bold;">{trust_label}</span>
                        &nbsp;|&nbsp; Detection triggers: <b>{badges}</b></p>
-                    <p><b>Projects:</b> {', '.join(row['projects'])}</p>
-                    <p><b>Commits analysed:</b> {row['total_scans']}
+                    <p style="margin:4px 0;"><b>Projects:</b> {', '.join(row['projects'])}</p>
+                    <p style="margin:4px 0;"><b>Commits analysed:</b> {row['total_scans']}
                        &nbsp;|&nbsp; <b>Avg risk:</b> {row['avg_risk']:.1f}%
                        &nbsp;|&nbsp; <b>Max risk:</b> {row['max_risk']}%
                        &nbsp;|&nbsp; <b>Std dev:</b> {row['std_risk']:.1f}
                        &nbsp;|&nbsp; <b>Anomaly score:</b> {row['if_score']:.3f}</p>
-                    <p><b>Avg commit hour:</b> {hour_label} {hour_flag}
+                    <p style="margin:4px 0;"><b>Avg commit hour:</b> {hour_label} {hour_flag}
                        &nbsp;|&nbsp; <b>Weekend commits:</b> {weekend_pct:.0f}% {weekend_flag}</p>
                 </div>
                 """, unsafe_allow_html=True)
