@@ -10,7 +10,7 @@ UEBA_MAX_RISK_THRESHOLD = 80
 # Analysis limits
 MAX_DIFF_CHARS_PER_COMMIT = 3000   # chars per commit in batch prompt
 MAX_DIFF_TOTAL_CHARS = 50_000      # hard cap before binary-file warning
-MAX_BATCH_SIZE = 10                # max commits sent in a single AI request
+MAX_BATCH_SIZE = 20                # max commits sent in a single AI request
 TOP_RISKY_DEVS = 5                 # how many developers shown in dashboard chart
 
 # Git
