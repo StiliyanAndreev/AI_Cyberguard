@@ -51,7 +51,7 @@ def _sanitize(text: str, max_len: int = MAX_DIFF_CHARS_PER_COMMIT) -> str:
     return text.replace("\x00", "").strip()[:max_len]
 
 
-_MODEL_FALLBACK_CHAIN = ["gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]
+_MODEL_FALLBACK_CHAIN = ["gemini-2.5-flash", "gemini-2.5-pro"]
 
 
 def _call_with_retry(fn, retries: int = 3, backoff: float = 2.0) -> Any:
@@ -74,6 +74,7 @@ def _call_with_model_fallback(make_fn, models: list[str] = _MODEL_FALLBACK_CHAIN
     last_exc: Exception | None = None
     for model in models:
         try:
+            logger.info("Trying model: %s", model)
             return _call_with_retry(lambda m=model: make_fn(m))
         except Exception as exc:
             err = str(exc)
