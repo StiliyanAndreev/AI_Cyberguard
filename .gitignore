@@ -5,6 +5,7 @@
 data/cyberguard.db
 data/clones/
 data/test_repo/
+data/test_attacks_repo/
 
 # Python временни файлове
 __pycache__/

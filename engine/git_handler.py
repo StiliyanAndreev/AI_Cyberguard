@@ -26,6 +26,16 @@ def _remove_readonly(func, path: str, _) -> None:
         logger.warning("Could not remove %s: %s", path, exc)
 
 
+def _normalize_github_url(url: str) -> str:
+    """Strip GitHub web path suffixes like /tree/main/subdir — git clones repo roots only."""
+    parsed = urlparse(url)
+    if parsed.netloc in ("github.com", "www.github.com"):
+        parts = parsed.path.strip("/").split("/")
+        if len(parts) >= 2:
+            return f"{parsed.scheme}://{parsed.netloc}/{parts[0]}/{parts[1]}"
+    return url
+
+
 def _validate_remote_url(url: str) -> None:
     """Raise ValueError for disallowed URL schemes."""
     parsed = urlparse(url)
@@ -86,6 +96,7 @@ def get_repo(path_or_url: str, is_cloud: bool = False, token: str = "") -> git.R
     os.makedirs(CLONE_BASE_DIR, exist_ok=True)
 
     if is_cloud:
+        path_or_url = _normalize_github_url(path_or_url)
         _validate_remote_url(path_or_url)
         _cleanup_clones_dir()
 
