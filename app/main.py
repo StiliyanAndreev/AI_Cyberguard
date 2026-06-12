@@ -20,6 +20,7 @@ from engine.config import (
 from engine.db_handler import delete_scan, get_all_scans, init_db, save_scan
 from engine.git_handler import get_commit_diff, get_latest_commits, get_repo
 from engine.eval_engine import compute_metrics, get_ground_truth
+from engine.static_baseline import analyze_diff, score_diff
 from engine.ueba_engine import build_developer_profiles
 
 logging.basicConfig(level=logging.INFO)
@@ -455,6 +456,8 @@ elif menu == t["menu_people"]:
 # PAGE 4: Evaluation Metrics
 # ---------------------------------------------------------------------------
 elif menu == t["menu_eval"]:
+    import plotly.graph_objects as go
+
     st.title("Detection Evaluation — Precision / Recall / F1")
     st.markdown(
         "Quantitative evaluation of the AI detection system against a labelled "
@@ -480,7 +483,7 @@ elif menu == t["menu_eval"]:
                 "Ensure the repository folder exists under `data/`."
             )
         else:
-            from engine.config import RISK_CRITICAL_MIN, RISK_SUSPICIOUS_MAX
+            from engine.config import RISK_CRITICAL_MIN
 
             threshold = st.slider(
                 "Classification threshold (risk score ≥ threshold → predicted malicious)",
@@ -496,72 +499,73 @@ elif menu == t["menu_eval"]:
                     "`python scripts/generate_attacks_repo.py`."
                 )
             else:
-                # ── KPI row ──────────────────────────────────────────────
-                st.write("---")
-                k1, k2, k3, k4 = st.columns(4)
-                with k1:
-                    st.markdown(
-                        f"<div class='kpi-card'><div class='kpi-title'>Precision</div>"
-                        f"<div class='kpi-value'>{metrics['precision']:.3f}</div></div>",
-                        unsafe_allow_html=True,
-                    )
-                with k2:
-                    st.markdown(
-                        f"<div class='kpi-card'><div class='kpi-title'>Recall</div>"
-                        f"<div class='kpi-value'>{metrics['recall']:.3f}</div></div>",
-                        unsafe_allow_html=True,
-                    )
-                with k3:
-                    st.markdown(
-                        f"<div class='kpi-card'><div class='kpi-title'>F1-Score</div>"
-                        f"<div class='kpi-value'>{metrics['f1']:.3f}</div></div>",
-                        unsafe_allow_html=True,
-                    )
-                with k4:
-                    st.markdown(
-                        f"<div class='kpi-card'><div class='kpi-title'>Accuracy</div>"
-                        f"<div class='kpi-value'>{metrics['accuracy']:.3f}</div></div>",
-                        unsafe_allow_html=True,
-                    )
+                tab_cg, tab_baseline = st.tabs([
+                    "🤖 CyberGuard AI Metrics",
+                    "🔍 Baseline Comparison (SAST-style)",
+                ])
 
-                st.write("")
+                # ════════════════════════════════════════════════════
+                # TAB 1 — CyberGuard AI metrics
+                # ════════════════════════════════════════════════════
+                with tab_cg:
+                    st.write("---")
+                    k1, k2, k3, k4 = st.columns(4)
+                    with k1:
+                        st.markdown(
+                            f"<div class='kpi-card'><div class='kpi-title'>Precision</div>"
+                            f"<div class='kpi-value'>{metrics['precision']:.3f}</div></div>",
+                            unsafe_allow_html=True,
+                        )
+                    with k2:
+                        st.markdown(
+                            f"<div class='kpi-card'><div class='kpi-title'>Recall</div>"
+                            f"<div class='kpi-value'>{metrics['recall']:.3f}</div></div>",
+                            unsafe_allow_html=True,
+                        )
+                    with k3:
+                        st.markdown(
+                            f"<div class='kpi-card'><div class='kpi-title'>F1-Score</div>"
+                            f"<div class='kpi-value'>{metrics['f1']:.3f}</div></div>",
+                            unsafe_allow_html=True,
+                        )
+                    with k4:
+                        st.markdown(
+                            f"<div class='kpi-card'><div class='kpi-title'>Accuracy</div>"
+                            f"<div class='kpi-value'>{metrics['accuracy']:.3f}</div></div>",
+                            unsafe_allow_html=True,
+                        )
 
-                # ── Confusion Matrix ─────────────────────────────────────
-                col_cm, col_counts = st.columns([1, 1])
+                    st.write("")
+                    col_cm, col_counts = st.columns([1, 1])
 
-                with col_cm:
-                    import plotly.graph_objects as go
+                    with col_cm:
+                        cm = metrics["confusion_matrix"]
+                        z = [[cm[1][1], cm[1][0]],
+                             [cm[0][1], cm[0][0]]]
+                        text = [
+                            [f"TP = {cm[1][1]}", f"FN = {cm[1][0]}"],
+                            [f"FP = {cm[0][1]}", f"TN = {cm[0][0]}"],
+                        ]
+                        fig_cm = go.Figure(data=go.Heatmap(
+                            z=z,
+                            x=["Predicted Malicious", "Predicted Safe"],
+                            y=["Actual Malicious", "Actual Safe"],
+                            text=text,
+                            texttemplate="%{text}",
+                            textfont={"size": 16},
+                            colorscale="RdYlGn_r",
+                            showscale=False,
+                        ))
+                        fig_cm.update_layout(
+                            title="Confusion Matrix — CyberGuard AI",
+                            template="plotly_dark",
+                            height=340,
+                        )
+                        st.plotly_chart(fig_cm, use_container_width=True)
 
-                    cm = metrics["confusion_matrix"]
-                    # Layout: [[TN, FP], [FN, TP]]
-                    z = [[cm[1][1], cm[1][0]],   # TP, FN  (row = Malicious)
-                         [cm[0][1], cm[0][0]]]   # FP, TN  (row = Safe)
-
-                    text = [
-                        [f"TP = {cm[1][1]}", f"FN = {cm[1][0]}"],
-                        [f"FP = {cm[0][1]}", f"TN = {cm[0][0]}"],
-                    ]
-
-                    fig_cm = go.Figure(data=go.Heatmap(
-                        z=z,
-                        x=["Predicted Malicious", "Predicted Safe"],
-                        y=["Actual Malicious", "Actual Safe"],
-                        text=text,
-                        texttemplate="%{text}",
-                        textfont={"size": 16},
-                        colorscale="RdYlGn_r",
-                        showscale=False,
-                    ))
-                    fig_cm.update_layout(
-                        title="Confusion Matrix",
-                        template="plotly_dark",
-                        height=340,
-                    )
-                    st.plotly_chart(fig_cm, use_container_width=True)
-
-                with col_counts:
-                    st.subheader("Classification Summary")
-                    st.markdown(f"""
+                    with col_counts:
+                        st.subheader("Classification Summary")
+                        st.markdown(f"""
 | Metric | Value |
 |---|---|
 | True Positives (TP) | **{metrics['tp']}** — malicious correctly flagged |
@@ -570,37 +574,201 @@ elif menu == t["menu_eval"]:
 | False Negatives (FN) | **{metrics['fn']}** — malicious commits missed |
 | Total evaluated | **{metrics['total']}** ({metrics['malicious_total']} malicious, {metrics['safe_total']} safe) |
 | Threshold used | **{metrics['threshold']}**/100 |
-                    """)
+                        """)
 
-                # ── Per-commit detail table ───────────────────────────────
-                st.write("---")
-                st.subheader("Per-Commit Classification Detail")
+                    st.write("---")
+                    st.subheader("Per-Commit Classification Detail")
+                    detail_df = metrics["matched_df"][
+                        ["Hash", "Author", "Score", "true_label", "predicted"]
+                    ].copy()
+                    detail_df["Ground Truth"] = detail_df["true_label"].map(
+                        {1: "🔴 Malicious", 0: "🟢 Safe"}
+                    )
+                    detail_df["Predicted"] = detail_df["predicted"].map(
+                        {1: "🔴 Malicious", 0: "🟢 Safe"}
+                    )
+                    detail_df["Correct"] = (
+                        detail_df["true_label"] == detail_df["predicted"]
+                    ).map({True: "✅", False: "❌"})
+                    detail_df = detail_df.drop(columns=["true_label", "predicted"])
+                    detail_df = detail_df.rename(columns={"Score": "Risk Score"})
+                    st.dataframe(
+                        detail_df.sort_values("Risk Score", ascending=False),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                    st.caption(
+                        f"Evaluation performed within the scope of the prepared test scenarios. "
+                        f"Classification threshold: risk score ≥ {threshold}."
+                    )
 
-                detail_df = metrics["matched_df"][
-                    ["Hash", "Author", "Score", "true_label", "predicted"]
-                ].copy()
-                detail_df["Ground Truth"] = detail_df["true_label"].map(
-                    {1: "🔴 Malicious", 0: "🟢 Safe"}
-                )
-                detail_df["Predicted"] = detail_df["predicted"].map(
-                    {1: "🔴 Malicious", 0: "🟢 Safe"}
-                )
-                detail_df["Correct"] = (
-                    detail_df["true_label"] == detail_df["predicted"]
-                ).map({True: "✅", False: "❌"})
-                detail_df = detail_df.drop(columns=["true_label", "predicted"])
-                detail_df = detail_df.rename(columns={"Score": "Risk Score"})
+                # ════════════════════════════════════════════════════
+                # TAB 2 — Baseline SAST comparison
+                # ════════════════════════════════════════════════════
+                with tab_baseline:
+                    st.markdown(
+                        "Rule-based static analysis applied to the stored git diffs — "
+                        "equivalent to running **Semgrep / Bandit** on the added lines of "
+                        "each commit. Patterns cover hardcoded IPs, exec(base64.decode()), "
+                        "subprocess execution, credential file reads, SUID bits, and more. "
+                        "Results are compared with CyberGuard's LLM-based detection."
+                    )
+                    st.write("---")
 
-                st.dataframe(
-                    detail_df.sort_values("Risk Score", ascending=False),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                    # Build per-commit comparison rows
+                    matched_df = metrics["matched_df"].copy()
+                    rows = []
+                    for _, row in matched_df.iterrows():
+                        findings = analyze_diff(row.get("Diff", ""))
+                        sast_flag = len(findings) > 0
+                        sast_high = sum(1 for f in findings if f.severity == "HIGH")
+                        cg_flag = bool(row["predicted"])
+                        true_flag = bool(row["true_label"])
 
-                st.caption(
-                    f"Evaluation performed within the scope of the prepared test scenarios. "
-                    f"Classification threshold: risk score ≥ {threshold}."
-                )
+                        if true_flag and cg_flag and sast_flag:
+                            detection = "Both"
+                        elif true_flag and cg_flag and not sast_flag:
+                            detection = "CyberGuard only"
+                        elif true_flag and not cg_flag and sast_flag:
+                            detection = "SAST only"
+                        elif not true_flag and not cg_flag and not sast_flag:
+                            detection = "Neither (safe)"
+                        elif not true_flag and (cg_flag or sast_flag):
+                            detection = "False positive"
+                        else:
+                            detection = "Missed (FN)"
+
+                        rows.append({
+                            "Hash":             row["Hash"],
+                            "Author":           row["Author"],
+                            "Risk Score":       row["Score"],
+                            "SAST HIGH rules":  sast_high,
+                            "Ground Truth":     "🔴 Malicious" if true_flag else "🟢 Safe",
+                            "Detection":        detection,
+                            "SAST Rules Hit":   ", ".join(f.rule_id for f in findings) or "—",
+                        })
+
+                    cmp_df = pd.DataFrame(rows)
+
+                    # ── Summary KPIs ─────────────────────────────────
+                    both        = (cmp_df["Detection"] == "Both").sum()
+                    cg_only     = (cmp_df["Detection"] == "CyberGuard only").sum()
+                    sast_only   = (cmp_df["Detection"] == "SAST only").sum()
+                    missed      = (cmp_df["Detection"] == "Missed (FN)").sum()
+                    false_pos   = (cmp_df["Detection"] == "False positive").sum()
+
+                    b1, b2, b3, b4, b5 = st.columns(5)
+                    for col, label, val, color in [
+                        (b1, "Both detected",        both,      "#21c354"),
+                        (b2, "CyberGuard only",       cg_only,   "#4b9fea"),
+                        (b3, "SAST only",             sast_only, "#faca2b"),
+                        (b4, "Missed by both",        missed,    "#ff4b4b"),
+                        (b5, "False positives",       false_pos, "#a0a0a0"),
+                    ]:
+                        col.markdown(
+                            f"<div class='kpi-card'>"
+                            f"<div class='kpi-title'>{label}</div>"
+                            f"<div class='kpi-value' style='color:{color}'>{val}</div>"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+
+                    st.write("")
+
+                    # ── Side-by-side confusion matrices ──────────────
+                    col_l, col_r = st.columns(2)
+
+                    # CyberGuard confusion matrix (already computed)
+                    with col_l:
+                        cm_cg = metrics["confusion_matrix"]
+                        z_cg = [[cm_cg[1][1], cm_cg[1][0]],
+                                [cm_cg[0][1], cm_cg[0][0]]]
+                        text_cg = [
+                            [f"TP={cm_cg[1][1]}", f"FN={cm_cg[1][0]}"],
+                            [f"FP={cm_cg[0][1]}", f"TN={cm_cg[0][0]}"],
+                        ]
+                        fig_cg2 = go.Figure(data=go.Heatmap(
+                            z=z_cg, x=["Pred Malicious", "Pred Safe"],
+                            y=["Actual Malicious", "Actual Safe"],
+                            text=text_cg, texttemplate="%{text}",
+                            textfont={"size": 14}, colorscale="Blues",
+                            showscale=False,
+                        ))
+                        fig_cg2.update_layout(
+                            title="CyberGuard AI", template="plotly_dark", height=300,
+                        )
+                        st.plotly_chart(fig_cg2, use_container_width=True)
+
+                    # SAST confusion matrix (build from cmp_df)
+                    with col_r:
+                        from engine.eval_engine import compute_metrics as _cm
+                        sast_gt = {
+                            row["Hash"]: (row["Ground Truth"] == "🔴 Malicious")
+                            for _, row in cmp_df.iterrows()
+                        }
+                        sast_scores_df = matched_df.copy()
+                        sast_scores_df["Score"] = [
+                            score_diff(r.get("Diff", "")) * 20
+                            for _, r in sast_scores_df.iterrows()
+                        ]
+                        sast_metrics = _cm(sast_scores_df, sast_gt, threshold=1)
+                        if sast_metrics:
+                            cm_s = sast_metrics["confusion_matrix"]
+                            z_s = [[cm_s[1][1], cm_s[1][0]],
+                                   [cm_s[0][1], cm_s[0][0]]]
+                            text_s = [
+                                [f"TP={cm_s[1][1]}", f"FN={cm_s[1][0]}"],
+                                [f"FP={cm_s[0][1]}", f"TN={cm_s[0][0]}"],
+                            ]
+                            fig_sast = go.Figure(data=go.Heatmap(
+                                z=z_s, x=["Pred Malicious", "Pred Safe"],
+                                y=["Actual Malicious", "Actual Safe"],
+                                text=text_s, texttemplate="%{text}",
+                                textfont={"size": 14}, colorscale="Oranges",
+                                showscale=False,
+                            ))
+                            fig_sast.update_layout(
+                                title="SAST Baseline (rule-based)",
+                                template="plotly_dark", height=300,
+                            )
+                            st.plotly_chart(fig_sast, use_container_width=True)
+
+                            # Metric comparison table
+                            st.subheader("Metric Comparison")
+                            st.markdown(f"""
+| Metric | CyberGuard AI (LLM) | SAST Baseline (rules) |
+|---|---|---|
+| Precision | **{metrics['precision']:.3f}** | {sast_metrics['precision']:.3f} |
+| Recall | **{metrics['recall']:.3f}** | {sast_metrics['recall']:.3f} |
+| F1-Score | **{metrics['f1']:.3f}** | {sast_metrics['f1']:.3f} |
+| Accuracy | **{metrics['accuracy']:.3f}** | {sast_metrics['accuracy']:.3f} |
+| False Positives | {metrics['fp']} | {sast_metrics['fp']} |
+| False Negatives | {metrics['fn']} | {sast_metrics['fn']} |
+                            """)
+
+                    # ── Per-commit comparison table ───────────────────
+                    st.write("---")
+                    st.subheader("Per-Commit Detection Breakdown")
+
+                    color_map = {
+                        "Both":             "#21c354",
+                        "CyberGuard only":  "#4b9fea",
+                        "SAST only":        "#faca2b",
+                        "Neither (safe)":   "#8b949e",
+                        "False positive":   "#a0a0a0",
+                        "Missed (FN)":      "#ff4b4b",
+                    }
+                    st.dataframe(
+                        cmp_df.sort_values("Risk Score", ascending=False),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                    st.caption(
+                        "SAST rules are applied to the added lines (+) of each stored diff. "
+                        "A commit is flagged by SAST when at least one HIGH-severity rule triggers. "
+                        "'CyberGuard only' rows highlight cases where semantic LLM analysis "
+                        "detects threats that pattern-matching alone cannot identify."
+                    )
 
 # ---------------------------------------------------------------------------
 # PAGE 5: System Logs
