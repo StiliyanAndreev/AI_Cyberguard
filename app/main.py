@@ -19,6 +19,7 @@ from engine.config import (
 )
 from engine.db_handler import delete_scan, get_all_scans, init_db, save_scan
 from engine.git_handler import get_commit_diff, get_latest_commits, get_repo
+from engine.eval_engine import compute_metrics, get_ground_truth
 from engine.ueba_engine import build_developer_profiles
 
 logging.basicConfig(level=logging.INFO)
@@ -55,6 +56,7 @@ translations = {
         "menu_scan": "➕ Сканиране на проект",
         "menu_people": "👥 Хора и UEBA",
         "menu_logs": "⚙️ Системни логове",
+        "menu_eval": "📈 Оценка на системата",
         "dash_title": "Сигурен преглед на организацията",
         "kpi_projects": "Проекти",
         "kpi_critical": "Критични",
@@ -82,6 +84,7 @@ translations = {
         "menu_scan": "➕ Scan & Add Project",
         "menu_people": "👥 People & UEBA",
         "menu_logs": "⚙️ System Logs",
+        "menu_eval": "📈 Evaluation Metrics",
         "dash_title": "Organizational Security Overview",
         "kpi_projects": "Projects",
         "kpi_critical": "Critical",
@@ -142,7 +145,7 @@ def go_to_view(view_name: str, filter_val=None) -> None:
 
 
 st.sidebar.markdown("---")
-menu = st.sidebar.radio(t["nav_title"], [t["menu_dash"], t["menu_scan"], t["menu_people"], t["menu_logs"]])
+menu = st.sidebar.radio(t["nav_title"], [t["menu_dash"], t["menu_scan"], t["menu_people"], t["menu_eval"], t["menu_logs"]])
 
 # ---------------------------------------------------------------------------
 # Load data
@@ -449,7 +452,158 @@ elif menu == t["menu_people"]:
                 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# PAGE 4: System Logs
+# PAGE 4: Evaluation Metrics
+# ---------------------------------------------------------------------------
+elif menu == t["menu_eval"]:
+    st.title("Detection Evaluation — Precision / Recall / F1")
+    st.markdown(
+        "Quantitative evaluation of the AI detection system against a labelled "
+        "ground-truth dataset. Ground truth is derived automatically from the "
+        "**test_attacks_repo** threat simulation repository."
+    )
+
+    if df.empty:
+        st.info("No scan data available. Run some scans first.")
+    else:
+        repos = sorted(df["Repo"].unique().tolist())
+        selected_eval_repo = st.selectbox("Select repository to evaluate:", repos)
+
+        repo_df = df[df["Repo"] == selected_eval_repo].copy()
+
+        with st.spinner("Loading ground truth from repository..."):
+            ground_truth = get_ground_truth(selected_eval_repo)
+
+        if ground_truth is None:
+            st.warning(
+                f"Ground truth could not be derived for **{selected_eval_repo}**. "
+                "Only the built-in **test_attacks_repo** is supported automatically. "
+                "Ensure the repository folder exists under `data/`."
+            )
+        else:
+            from engine.config import RISK_CRITICAL_MIN, RISK_SUSPICIOUS_MAX
+
+            threshold = st.slider(
+                "Classification threshold (risk score ≥ threshold → predicted malicious)",
+                min_value=0, max_value=100, value=RISK_CRITICAL_MIN, step=5,
+            )
+
+            metrics = compute_metrics(repo_df, ground_truth, threshold=threshold)
+
+            if metrics is None:
+                st.warning(
+                    "None of the scanned commits matched the ground truth hashes. "
+                    "Re-scan the repository after regenerating it with "
+                    "`python scripts/generate_attacks_repo.py`."
+                )
+            else:
+                # ── KPI row ──────────────────────────────────────────────
+                st.write("---")
+                k1, k2, k3, k4 = st.columns(4)
+                with k1:
+                    st.markdown(
+                        f"<div class='kpi-card'><div class='kpi-title'>Precision</div>"
+                        f"<div class='kpi-value'>{metrics['precision']:.3f}</div></div>",
+                        unsafe_allow_html=True,
+                    )
+                with k2:
+                    st.markdown(
+                        f"<div class='kpi-card'><div class='kpi-title'>Recall</div>"
+                        f"<div class='kpi-value'>{metrics['recall']:.3f}</div></div>",
+                        unsafe_allow_html=True,
+                    )
+                with k3:
+                    st.markdown(
+                        f"<div class='kpi-card'><div class='kpi-title'>F1-Score</div>"
+                        f"<div class='kpi-value'>{metrics['f1']:.3f}</div></div>",
+                        unsafe_allow_html=True,
+                    )
+                with k4:
+                    st.markdown(
+                        f"<div class='kpi-card'><div class='kpi-title'>Accuracy</div>"
+                        f"<div class='kpi-value'>{metrics['accuracy']:.3f}</div></div>",
+                        unsafe_allow_html=True,
+                    )
+
+                st.write("")
+
+                # ── Confusion Matrix ─────────────────────────────────────
+                col_cm, col_counts = st.columns([1, 1])
+
+                with col_cm:
+                    import plotly.graph_objects as go
+
+                    cm = metrics["confusion_matrix"]
+                    # Layout: [[TN, FP], [FN, TP]]
+                    z = [[cm[1][1], cm[1][0]],   # TP, FN  (row = Malicious)
+                         [cm[0][1], cm[0][0]]]   # FP, TN  (row = Safe)
+
+                    text = [
+                        [f"TP = {cm[1][1]}", f"FN = {cm[1][0]}"],
+                        [f"FP = {cm[0][1]}", f"TN = {cm[0][0]}"],
+                    ]
+
+                    fig_cm = go.Figure(data=go.Heatmap(
+                        z=z,
+                        x=["Predicted Malicious", "Predicted Safe"],
+                        y=["Actual Malicious", "Actual Safe"],
+                        text=text,
+                        texttemplate="%{text}",
+                        textfont={"size": 16},
+                        colorscale="RdYlGn_r",
+                        showscale=False,
+                    ))
+                    fig_cm.update_layout(
+                        title="Confusion Matrix",
+                        template="plotly_dark",
+                        height=340,
+                    )
+                    st.plotly_chart(fig_cm, use_container_width=True)
+
+                with col_counts:
+                    st.subheader("Classification Summary")
+                    st.markdown(f"""
+| Metric | Value |
+|---|---|
+| True Positives (TP) | **{metrics['tp']}** — malicious correctly flagged |
+| False Positives (FP) | **{metrics['fp']}** — safe commits incorrectly flagged |
+| True Negatives (TN) | **{metrics['tn']}** — safe commits correctly cleared |
+| False Negatives (FN) | **{metrics['fn']}** — malicious commits missed |
+| Total evaluated | **{metrics['total']}** ({metrics['malicious_total']} malicious, {metrics['safe_total']} safe) |
+| Threshold used | **{metrics['threshold']}**/100 |
+                    """)
+
+                # ── Per-commit detail table ───────────────────────────────
+                st.write("---")
+                st.subheader("Per-Commit Classification Detail")
+
+                detail_df = metrics["matched_df"][
+                    ["Hash", "Author", "Score", "true_label", "predicted"]
+                ].copy()
+                detail_df["Ground Truth"] = detail_df["true_label"].map(
+                    {1: "🔴 Malicious", 0: "🟢 Safe"}
+                )
+                detail_df["Predicted"] = detail_df["predicted"].map(
+                    {1: "🔴 Malicious", 0: "🟢 Safe"}
+                )
+                detail_df["Correct"] = (
+                    detail_df["true_label"] == detail_df["predicted"]
+                ).map({True: "✅", False: "❌"})
+                detail_df = detail_df.drop(columns=["true_label", "predicted"])
+                detail_df = detail_df.rename(columns={"Score": "Risk Score"})
+
+                st.dataframe(
+                    detail_df.sort_values("Risk Score", ascending=False),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                st.caption(
+                    f"Evaluation performed within the scope of the prepared test scenarios. "
+                    f"Classification threshold: risk score ≥ {threshold}."
+                )
+
+# ---------------------------------------------------------------------------
+# PAGE 5: System Logs
 # ---------------------------------------------------------------------------
 elif menu == t["menu_logs"]:
     st.title("Raw Database Logs")
