@@ -421,34 +421,42 @@ elif menu == t["menu_people"]:
 
             # Developer cards
             for _, row in profiles.iterrows():
-                border_color = "#ff4b4b" if row["is_risky"] else "#21c354"
-                trust_label = "🔴 HIGH RISK INSIDER" if row["is_risky"] else "🟢 TRUSTED"
-                trust_color = "#ff4b4b" if row["is_risky"] else "#21c354"
+                border_color = "#e53935" if row["is_risky"] else "#2e7d32"
+                bg_color     = "#fff5f5" if row["is_risky"] else "#f0faf0"
+                trust_label  = "🔴 HIGH RISK INSIDER" if row["is_risky"] else "🟢 TRUSTED"
+                trust_color  = "#c62828" if row["is_risky"] else "#1b5e20"
 
                 rule_badge = "⚡ Rule" if row["rule_flag"] else ""
-                ml_badge = "🤖 ML" if row["if_anomaly"] else ""
-                badges = " ".join(filter(None, [rule_badge, ml_badge])) or "—"
+                ml_badge   = "🤖 ML"   if row["if_anomaly"] else ""
+                badges     = " ".join(filter(None, [rule_badge, ml_badge])) or "—"
 
-                hour = row['avg_commit_hour']
-                hour_label = f"{hour:.0f}:00"
-                hour_flag = "⚠️" if hour < 6 or hour > 22 else ""
+                hour        = row['avg_commit_hour']
+                hour_label  = f"{hour:.0f}:00"
+                hour_flag   = "⚠️" if hour < 6 or hour > 22 else ""
                 weekend_pct = row['weekend_ratio'] * 100
                 weekend_flag = "⚠️" if weekend_pct > 40 else ""
 
                 st.markdown(f"""
-                <div style="background-color:#161b22; padding:20px; border-radius:12px;
-                            border-left:6px solid {border_color}; margin-bottom:15px;">
-                    <h3 style="margin:0 0 8px 0;">👤 {row['Author']}</h3>
-                    <p style="margin:4px 0;">Trust Level: <span style="color:{trust_color}; font-weight:bold;">{trust_label}</span>
-                       &nbsp;|&nbsp; Detection triggers: <b>{badges}</b></p>
-                    <p style="margin:4px 0;"><b>Projects:</b> {', '.join(row['projects'])}</p>
-                    <p style="margin:4px 0;"><b>Commits analysed:</b> {row['total_scans']}
-                       &nbsp;|&nbsp; <b>Avg risk:</b> {row['avg_risk']:.1f}%
-                       &nbsp;|&nbsp; <b>Max risk:</b> {row['max_risk']}%
-                       &nbsp;|&nbsp; <b>Std dev:</b> {row['std_risk']:.1f}
-                       &nbsp;|&nbsp; <b>Anomaly score:</b> {row['if_score']:.3f}</p>
-                    <p style="margin:4px 0;"><b>Avg commit hour:</b> {hour_label} {hour_flag}
-                       &nbsp;|&nbsp; <b>Weekend commits:</b> {weekend_pct:.0f}% {weekend_flag}</p>
+                <div style="background-color:{bg_color}; padding:20px; border-radius:12px;
+                            border-left:7px solid {border_color}; margin-bottom:15px;
+                            box-shadow:0 2px 6px rgba(0,0,0,0.12); color:#1a1a1a;">
+                    <h3 style="margin:0 0 8px 0; color:#1a1a1a;">👤 {row['Author']}</h3>
+                    <p style="margin:4px 0; color:#1a1a1a;">
+                        Trust Level: <span style="color:{trust_color}; font-weight:bold;">{trust_label}</span>
+                        &nbsp;|&nbsp; Detection triggers: <b>{badges}</b>
+                    </p>
+                    <p style="margin:4px 0; color:#333333;"><b>Projects:</b> {', '.join(row['projects'])}</p>
+                    <p style="margin:4px 0; color:#333333;">
+                        <b>Commits analysed:</b> {row['total_scans']}
+                        &nbsp;|&nbsp; <b>Avg risk:</b> {row['avg_risk']:.1f}%
+                        &nbsp;|&nbsp; <b>Max risk:</b> {row['max_risk']}%
+                        &nbsp;|&nbsp; <b>Std dev:</b> {row['std_risk']:.1f}
+                        &nbsp;|&nbsp; <b>Anomaly score:</b> {row['if_score']:.3f}
+                    </p>
+                    <p style="margin:4px 0; color:#333333;">
+                        <b>Avg commit hour:</b> {hour_label} {hour_flag}
+                        &nbsp;|&nbsp; <b>Weekend commits:</b> {weekend_pct:.0f}% {weekend_flag}
+                    </p>
                 </div>
                 """, unsafe_allow_html=True)
 
