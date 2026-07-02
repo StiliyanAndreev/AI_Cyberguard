@@ -300,7 +300,7 @@ elif menu == t["menu_scan"]:
         if not path_input.strip():
             st.warning("Please enter a repository URL or local path.")
         else:
-            # Store ONLY the clean path — token is never saved to session state
+            # Store ONLY the clean path - token is never saved to session state
             st.session_state["current_path"] = path_input.strip()
             st.session_state["current_token"] = token  # stored only in session, not in DB or logs
             st.session_state["current_mode"] = mode
@@ -394,7 +394,7 @@ elif menu == t["menu_people"]:
             if "Isolation Forest" in method:
                 st.success("🤖 ML anomaly detection active (Isolation Forest)")
             else:
-                st.warning(f"⚠️ {method} — scan more developers to enable ML detection")
+                st.warning(f"⚠️ {method} - scan more developers to enable ML detection")
 
             # Summary metrics
             total = len(profiles)
@@ -428,7 +428,7 @@ elif menu == t["menu_people"]:
 
                 rule_badge = "⚡ Rule" if row["rule_flag"] else ""
                 ml_badge   = "🤖 ML"   if row["if_anomaly"] else ""
-                badges     = " ".join(filter(None, [rule_badge, ml_badge])) or "—"
+                badges     = " ".join(filter(None, [rule_badge, ml_badge])) or "-"
 
                 hour        = row['avg_commit_hour']
                 hour_label  = f"{hour:.0f}:00"
@@ -466,7 +466,7 @@ elif menu == t["menu_people"]:
 elif menu == t["menu_eval"]:
     import plotly.graph_objects as go
 
-    st.title("Detection Evaluation — Precision / Recall / F1")
+    st.title("Detection Evaluation - Precision / Recall / F1")
     st.markdown(
         "Quantitative evaluation of the AI detection system against a labelled "
         "ground-truth dataset. Ground truth is derived automatically from the "
@@ -513,7 +513,7 @@ elif menu == t["menu_eval"]:
                 ])
 
                 # ════════════════════════════════════════════════════
-                # TAB 1 — CyberGuard AI metrics
+                # TAB 1 - CyberGuard AI metrics
                 # ════════════════════════════════════════════════════
                 with tab_cg:
                     st.write("---")
@@ -565,7 +565,7 @@ elif menu == t["menu_eval"]:
                             showscale=False,
                         ))
                         fig_cm.update_layout(
-                            title="Confusion Matrix — CyberGuard AI",
+                            title="Confusion Matrix - CyberGuard AI",
                             template="plotly_dark",
                             height=340,
                         )
@@ -576,10 +576,10 @@ elif menu == t["menu_eval"]:
                         st.markdown(f"""
 | Metric | Value |
 |---|---|
-| True Positives (TP) | **{metrics['tp']}** — malicious correctly flagged |
-| False Positives (FP) | **{metrics['fp']}** — safe commits incorrectly flagged |
-| True Negatives (TN) | **{metrics['tn']}** — safe commits correctly cleared |
-| False Negatives (FN) | **{metrics['fn']}** — malicious commits missed |
+| True Positives (TP) | **{metrics['tp']}** - malicious correctly flagged |
+| False Positives (FP) | **{metrics['fp']}** - safe commits incorrectly flagged |
+| True Negatives (TN) | **{metrics['tn']}** - safe commits correctly cleared |
+| False Negatives (FN) | **{metrics['fn']}** - malicious commits missed |
 | Total evaluated | **{metrics['total']}** ({metrics['malicious_total']} malicious, {metrics['safe_total']} safe) |
 | Threshold used | **{metrics['threshold']}**/100 |
                         """)
@@ -611,11 +611,11 @@ elif menu == t["menu_eval"]:
                     )
 
                 # ════════════════════════════════════════════════════
-                # TAB 2 — Baseline SAST comparison
+                # TAB 2 - Baseline SAST comparison
                 # ════════════════════════════════════════════════════
                 with tab_baseline:
                     st.markdown(
-                        "Rule-based static analysis applied to the stored git diffs — "
+                        "Rule-based static analysis applied to the stored git diffs - "
                         "equivalent to running **Semgrep / Bandit** on the added lines of "
                         "each commit. Patterns cover hardcoded IPs, exec(base64.decode()), "
                         "subprocess execution, credential file reads, SUID bits, and more. "
@@ -653,7 +653,7 @@ elif menu == t["menu_eval"]:
                             "SAST HIGH rules":  sast_high,
                             "Ground Truth":     "🔴 Malicious" if true_flag else "🟢 Safe",
                             "Detection":        detection,
-                            "SAST Rules Hit":   ", ".join(f.rule_id for f in findings) or "—",
+                            "SAST Rules Hit":   ", ".join(f.rule_id for f in findings) or "-",
                         })
 
                     cmp_df = pd.DataFrame(rows)

@@ -2,11 +2,16 @@
 Evaluation engine — computes binary classification metrics for
 the AI-based commit threat detection.
 
-Ground truth is derived automatically from the repository's git log
-by matching commit messages against the known threat simulation dataset.
+Ground truth is derived in two ways (priority order):
+1. Repo-local labels file: a `.cyberguard_labels.json` in the repo root
+   mapping commit messages to true/false (true = malicious). Enables
+   evaluation of any repository without hardcoded message lists.
+2. Built-in fallback: the _MALICIOUS_MESSAGES frozenset for the bundled
+   test_attacks_repo threat simulation dataset.
 Supports precision, recall, F1-score, accuracy, and confusion matrix.
 """
 
+import json
 import logging
 import subprocess
 from pathlib import Path
@@ -41,14 +46,43 @@ _MALICIOUS_MESSAGES: frozenset[str] = frozenset({
 })
 
 
+def _load_repo_label_file(repo_path: Path) -> set[str]:
+    """
+    Load malicious commit messages from a .cyberguard_labels.json file
+    in the repo root. Returns an empty set if the file is absent or invalid.
+
+    Expected format:
+        { "Commit message text": true, "Safe message": false, ... }
+    """
+    labels_file = repo_path / ".cyberguard_labels.json"
+    if not labels_file.exists():
+        return set()
+    try:
+        data = json.loads(labels_file.read_text(encoding="utf-8"))
+        return {msg for msg, is_mal in data.items() if is_mal}
+    except Exception as exc:
+        logger.warning("Could not parse %s: %s", labels_file, exc)
+        return set()
+
+
 def _read_repo_labels(repo_path: str) -> dict[str, bool]:
     """
     Return {short_hash (8 chars): is_malicious} for every commit in repo_path.
+
+    Ground truth priority:
+    1. .cyberguard_labels.json in the repo root (repo-specific labels)
+    2. Built-in _MALICIOUS_MESSAGES frozenset (test_attacks_repo fallback)
+
     Returns an empty dict if repo_path is not a valid git repository.
     """
     path = Path(repo_path)
     if not (path / ".git").exists():
         return {}
+
+    repo_labels = _load_repo_label_file(path)
+    malicious_messages = repo_labels if repo_labels else _MALICIOUS_MESSAGES
+    if repo_labels:
+        logger.info("Using repo-local labels from .cyberguard_labels.json (%d malicious)", len(repo_labels))
 
     result = subprocess.run(
         ["git", "log", "--format=%H\t%s", "--all"],
@@ -66,7 +100,7 @@ def _read_repo_labels(repo_path: str) -> dict[str, bool]:
         if "\t" not in line:
             continue
         full_hash, message = line.split("\t", 1)
-        labels[full_hash[:8]] = message.strip() in _MALICIOUS_MESSAGES
+        labels[full_hash[:8]] = message.strip() in malicious_messages
 
     return labels
 
